@@ -105,14 +105,6 @@ input::-webkit-outer-spin-button {
   font-size: 12px;
   line-height: 1.5;
 }
-.field-net .input-group {
-  border-color: var(--primary);
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-.field-net .input-group > span {
-  color: var(--accent-foreground);
-}
 .summary {
   display: flex;
   align-items: center;
