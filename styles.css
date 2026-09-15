@@ -72,7 +72,7 @@ label {
 }
 .input-group > span {
   color: var(--muted-foreground);
-  font-size: 18px;
+  font-size: 23px;
 }
 .input-group:focus-within {
   border-color: var(--ring);
