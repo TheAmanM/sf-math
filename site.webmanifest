@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "SF Calculator",
-  "short_name": "SF Calculator",
+  "name": "SF Math",
+  "short_name": "SF Math",
   "description": "Everyone in SF has a number.",
   "lang": "en-US",
   "start_url": "/",
