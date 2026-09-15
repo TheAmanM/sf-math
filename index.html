@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>SF Pay Converter</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      document.documentElement.classList.toggle(
+        "dark",
+        matchMedia("(prefers-color-scheme: dark)").matches,
+      );
+      matchMedia("(prefers-color-scheme: dark)").addEventListener(
+        "change",
+        (event) => {
+          document.documentElement.classList.toggle("dark", event.matches);
+        },
+      );
+    </script>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>SF Pay Converter</h1>
+      </header>
+
+      <section
+        class="card"
+        aria-label="Pay conversion"
+        aria-describedby="assumptions"
+      >
+        <div class="fields">
+          <div class="field">
+            <label for="hourly">Hourly rate</label>
+            <div class="input-group">
+              <span aria-hidden="true">$</span>
+              <input
+                id="hourly"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                value="60.00"
+                aria-describedby="hourly-unit"
+              />
+            </div>
+            <p class="field-hint" id="hourly-unit">Before tax</p>
+          </div>
+          <div class="field">
+            <label for="annual">Annual salary</label>
+            <div class="input-group">
+              <span aria-hidden="true">$</span>
+              <input
+                id="annual"
+                type="number"
+                min="0"
+                step="100"
+                inputmode="decimal"
+                value="124800"
+                aria-describedby="annual-unit"
+              />
+            </div>
+            <p class="field-hint" id="annual-unit">Before tax</p>
+          </div>
+          <div class="field field-net">
+            <label for="biweekly">Biweekly take-home</label>
+            <div class="input-group">
+              <span aria-hidden="true">$</span>
+              <input
+                id="biweekly"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                aria-describedby="biweekly-unit"
+              />
+            </div>
+            <p class="field-hint" id="biweekly-unit">
+              After tax · 26 paychecks/year
+            </p>
+          </div>
+        </div>
+        <div class="summary" aria-live="polite" aria-atomic="true">
+          <span>Annual take-home</span>
+          <output id="annualNet" for="hourly annual biweekly"></output>
+        </div>
+      </section>
+      <p class="note" id="assumptions">
+        2026 estimate · Single filer · 40 hours/week<br />Standard deductions;
+        excludes benefits and retirement contributions.
+      </p>
+    </main>
+
+    <script>
+      (() => {
+        const HOURS_PER_WEEK = 40;
+        const WEEKS_PER_YEAR = 52;
+        const PAY_PERIODS = 26;
+
+        const FED_STANDARD_DEDUCTION = 16100;
+        const CA_STANDARD_DEDUCTION = 5706;
+        const CA_PERSONAL_EXEMPTION = 153;
+        const SS_WAGE_BASE = 184500;
+
+        const federalBrackets = [
+          [12400, 0.1],
+          [50400, 0.12],
+          [105700, 0.22],
+          [201775, 0.24],
+          [256225, 0.32],
+          [640600, 0.35],
+          [Infinity, 0.37],
+        ];
+
+        // 2026 CA estimated-tax instructions direct taxpayers to the 2025 tax table.
+        const californiaBrackets = [
+          [11079, 0.01],
+          [26264, 0.02],
+          [41452, 0.04],
+          [57542, 0.06],
+          [72724, 0.08],
+          [371479, 0.093],
+          [445771, 0.103],
+          [742953, 0.113],
+          [Infinity, 0.123],
+        ];
+
+        const hourly = document.getElementById("hourly");
+        const annual = document.getElementById("annual");
+        const biweekly = document.getElementById("biweekly");
+
+        const money2 = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+
+        function progressiveTax(taxableIncome, brackets) {
+          let income = Math.max(0, taxableIncome);
+          let tax = 0;
+          let floor = 0;
+
+          for (const [ceiling, rate] of brackets) {
+            const slice = Math.max(0, Math.min(income, ceiling) - floor);
+            tax += slice * rate;
+            if (income <= ceiling) break;
+            floor = ceiling;
+          }
+          return tax;
+        }
+
+        function estimate(gross) {
+          gross = Math.max(0, Number(gross) || 0);
+
+          const fedTaxable = Math.max(0, gross - FED_STANDARD_DEDUCTION);
+          const federal = progressiveTax(fedTaxable, federalBrackets);
+
+          const caTaxable = Math.max(0, gross - CA_STANDARD_DEDUCTION);
+          const california = Math.max(
+            0,
+            progressiveTax(caTaxable, californiaBrackets) -
+              CA_PERSONAL_EXEMPTION,
+          );
+
+          const socialSecurity = Math.min(gross, SS_WAGE_BASE) * 0.062;
+          const medicare = gross * 0.0145 + Math.max(0, gross - 200000) * 0.009;
+          const caSdi = gross * 0.013;
+
+          const totalTax =
+            federal + california + socialSecurity + medicare + caSdi;
+          const netAnnual = Math.max(0, gross - totalTax);
+
+          return {
+            gross,
+            federal,
+            california,
+            socialSecurity,
+            medicare,
+            caSdi,
+            netAnnual,
+            netBiweekly: netAnnual / PAY_PERIODS,
+          };
+        }
+
+        function grossFromNetBiweekly(target) {
+          target = Math.max(0, Number(target) || 0);
+          if (target === 0) return 0;
+
+          let low = 0;
+          let high = Math.max(100000, target * PAY_PERIODS * 2.5);
+
+          while (estimate(high).netBiweekly < target && high < 10000000) {
+            high *= 2;
+          }
+
+          for (let i = 0; i < 70; i++) {
+            const mid = (low + high) / 2;
+            if (estimate(mid).netBiweekly < target) low = mid;
+            else high = mid;
+          }
+          return (low + high) / 2;
+        }
+
+        function cleanNumber(value) {
+          const n = Number(value);
+          return Number.isFinite(n) ? Math.max(0, n) : 0;
+        }
+
+        function renderFromGross(gross, source) {
+          const result = estimate(gross);
+          const hourlyRate = gross / (HOURS_PER_WEEK * WEEKS_PER_YEAR);
+
+          if (source !== "hourly") hourly.value = hourlyRate.toFixed(2);
+          if (source !== "annual") annual.value = Math.round(gross).toString();
+          if (source !== "biweekly")
+            biweekly.value = result.netBiweekly.toFixed(2);
+
+          document.getElementById("annualNet").textContent = money2.format(
+            result.netAnnual,
+          );
+        }
+
+        hourly.addEventListener("input", () => {
+          const rate = cleanNumber(hourly.value);
+          renderFromGross(rate * HOURS_PER_WEEK * WEEKS_PER_YEAR, "hourly");
+        });
+
+        annual.addEventListener("input", () => {
+          renderFromGross(cleanNumber(annual.value), "annual");
+        });
+
+        biweekly.addEventListener("input", () => {
+          const gross = grossFromNetBiweekly(cleanNumber(biweekly.value));
+          renderFromGross(gross, "biweekly");
+        });
+
+        renderFromGross(60 * HOURS_PER_WEEK * WEEKS_PER_YEAR, "hourly");
+      })();
+    </script>
+  </body>
+</html>
