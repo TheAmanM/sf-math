@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "SF Pay Converter",
-  "short_name": "SF Pay",
-  "description": "San Francisco hourly, salary, and take-home pay calculator.",
+  "name": "SF Calculator",
+  "short_name": "SF Calculator",
+  "description": "Everyone in SF has a number.",
   "lang": "en-US",
   "start_url": "/",
   "scope": "/",
